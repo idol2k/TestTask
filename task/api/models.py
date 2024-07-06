@@ -1,41 +1,58 @@
 from django.db import models
 from django.contrib.auth.models import AbstractUser
 
+
 class User(AbstractUser):
-    is_employee = models.BooleanField(default=False)
+    email = models.EmailField(unique=True)
+    phone = models.CharField(max_length=20, unique=True, null=True, blank=True)
     is_client = models.BooleanField(default=False)
-    phone = models.CharField(max_length=15, unique=True)
+    is_employee = models.BooleanField(default=False)
 
     groups = models.ManyToManyField(
-        'auth.Group',
-        related_name='api_users',
+        "auth.Group",
+        related_name="custom_user_set",
         blank=True,
-        help_text='The groups this user belongs to. A user will get all permissions granted to each of their groups.',
-        verbose_name='groups',
+        help_text="The groups this user belongs to. A user will get all permissions granted to each of their groups.",
+        verbose_name="groups",
     )
     user_permissions = models.ManyToManyField(
-        'auth.Permission',
-        related_name='api_users',
+        "auth.Permission",
+        related_name="custom_user_set",
         blank=True,
-        help_text='Specific permissions for this user.',
-        verbose_name='user permissions',
+        help_text="Specific permissions for this user.",
+        verbose_name="user permissions",
     )
+
+    def save(self, *args, **kwargs):
+        if self.is_client and self.is_employee:
+            raise ValueError("User cannot be both client and employee.")
+        super().save(*args, **kwargs)
+
+class Employee(models.Model):
+    user = models.OneToOneField(User, on_delete=models.CASCADE)
+
+class Client(models.Model):
+    user = models.OneToOneField(User, on_delete=models.CASCADE)
+
+
+class Access(models.Model):
+    user = models.OneToOneField(User, on_delete=models.CASCADE)
+    can_view_all_tasks = models.BooleanField(default=False)
+
 
 class Task(models.Model):
     STATUS_CHOICES = [
-        ('pending', 'Ожидает исполнителя'),
-        ('in_progress', 'В процессе'),
-        ('completed', 'Выполнена'),
+        ("pending", "Pending"),
+        ("in_progress", "In Progress"),
+        ("completed", "Completed"),
     ]
+
     title = models.CharField(max_length=255)
     description = models.TextField()
-    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
-    client = models.ForeignKey(User, related_name='created_tasks', on_delete=models.CASCADE)
-    employee = models.ForeignKey(User, related_name='assigned_tasks', on_delete=models.SET_NULL, null=True, blank=True)
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-    closed_at = models.DateTimeField(null=True, blank=True)
-    report = models.TextField(blank=True)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES)
+    employee = models.ForeignKey(Employee, on_delete=models.SET_NULL, null=True, blank=True)
+    report = models.TextField(blank=True, null=True)
+    created_by = models.ForeignKey(Client, on_delete=models.CASCADE)
 
     def __str__(self):
         return self.title
